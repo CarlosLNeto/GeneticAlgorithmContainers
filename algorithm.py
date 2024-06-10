@@ -6,6 +6,7 @@ NUM_CONTAINERS = 30
 POPULATION_SIZE = 100
 GENERATIONS = 1000
 MUTATION_RATE = 0.01
+ELITISM_RATE = 0.05
 CONTAINERS_PER_FLOOR = [12, 12, 6]
 PORT_ROWS = 3
 PORT_COLS = 5
@@ -62,33 +63,27 @@ def initialize_population():
     return population
 
 
-# Seleção por torneio
-def tournament_selection(population, fitnesses):
-    selected = []
-    for _ in range(2):
-        participants = random.sample(list(zip(population, fitnesses)), 3)
-        selected.append(max(participants, key=lambda x: x[1])[0])
-    return selected
+# Seleção por roleta
+def roulette_wheel_selection(population, fitnesses):
+    total_fitness = sum(fitnesses)
+    selection_probs = [f / total_fitness for f in fitnesses]
+    selected_indices = np.random.choice(len(population), 2, p=selection_probs)
+    return population[selected_indices[0]], population[selected_indices[1]]
 
 
-# Operador de cruzamento baseado em ciclo
+# Operador de cruzamento de ciclo
 def crossover(parent1, parent2):
     size = len(parent1)
     child1, child2 = [None] * size, [None] * size
-    point = random.randint(0, size - 1)
-    cycle = [point]
-    child1[point] = parent1[point]
-    child2[point] = parent2[point]
+    cycle_start = random.randint(0, size - 1)
 
+    idx = cycle_start
     while True:
-        next_val = parent2[point]
-        next_idx = parent1.index(next_val)
-        if next_idx in cycle:
+        child1[idx] = parent1[idx]
+        child2[idx] = parent2[idx]
+        idx = parent1.index(parent2[idx])
+        if idx == cycle_start:
             break
-        cycle.append(next_idx)
-        child1[next_idx] = parent1[next_idx]
-        child2[next_idx] = parent2[next_idx]
-        point = next_idx
 
     for i in range(size):
         if child1[i] is None:
@@ -106,24 +101,31 @@ def mutate(individual):
         individual[i], individual[j] = individual[j], individual[i]
 
 
-# Algoritmo Genético
+# Algoritmo Genético com Elitismo e Seleção por Roleta
 def genetic_algorithm():
     population = initialize_population()
     best_solution = None
     best_fitness = float("-inf")
 
+    elitism_count = int(POPULATION_SIZE * ELITISM_RATE)
+
     for generation in range(GENERATIONS):
         fitnesses = [fitness(individual) for individual in population]
 
-        new_population = []
-        for _ in range(POPULATION_SIZE // 2):
-            parent1, parent2 = tournament_selection(population, fitnesses)
+        # Preservar os melhores indivíduos (elitismo)
+        new_population = [
+            population[idx] for idx in np.argsort(fitnesses)[-elitism_count:]
+        ]
+
+        # Gerar nova população através de seleção, cruzamento e mutação
+        while len(new_population) < POPULATION_SIZE:
+            parent1, parent2 = roulette_wheel_selection(population, fitnesses)
             child1, child2 = crossover(parent1, parent2)
             mutate(child1)
             mutate(child2)
             new_population.extend([child1, child2])
 
-        population = new_population
+        population = new_population[:POPULATION_SIZE]
 
         current_best_fitness = max(fitnesses)
         if current_best_fitness > best_fitness:
@@ -161,7 +163,7 @@ best_solution, best_fitness = genetic_algorithm()
 
 # Mostrar coordenadas de origem e destino na ordem da melhor solução encontrada
 for container in best_solution:
-    port_coord, barge_coord = get_coordinates(container, best_solution[container])
+    port_coord, barge_coord = get_coordinates(container, best_solution.index(container))
     print(f"Container {container}: Porto {port_coord} -> Balsa {barge_coord}")
 
 print("Melhor solução encontrada:", best_solution)
