@@ -20,17 +20,22 @@ def fitness(solution):
 
 
 def calculate_stability(solution):
-    floor_weights = [
-        sum(
-            1
-            for i in range(
-                sum(CONTAINERS_PER_FLOOR[:floor]),
-                sum(CONTAINERS_PER_FLOOR[: floor + 1]),
-            )
-        )
-        for floor in range(len(CONTAINERS_PER_FLOOR))
-    ]
+    # Inicializa a lista para armazenar o número de contêineres em cada andar
+    floor_weights = [0] * len(CONTAINERS_PER_FLOOR)
+
+    # Conta o número de contêineres em cada andar com base na solução
+    for i in range(NUM_CONTAINERS):
+        position = solution[i]
+        if position < 12:
+            floor_weights[0] += 1
+        elif position < 24:
+            floor_weights[1] += 1
+        else:
+            floor_weights[2] += 1
+
+    # Calcula a variância do número de contêineres entre os andares
     variance = np.var(floor_weights)
+
     return variance
 
 
