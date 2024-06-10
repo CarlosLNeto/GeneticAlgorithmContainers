@@ -20,22 +20,15 @@ def fitness(solution):
 
 
 def calculate_stability(solution):
-    # Inicializa a lista para armazenar o número de contêineres em cada andar
     floor_weights = [0] * len(CONTAINERS_PER_FLOOR)
-
-    # Conta o número de contêineres em cada andar com base na solução
-    for i in range(NUM_CONTAINERS):
-        position = solution[i]
+    for position in solution:
         if position < 12:
             floor_weights[0] += 1
         elif position < 24:
             floor_weights[1] += 1
         else:
             floor_weights[2] += 1
-
-    # Calcula a variância do número de contêineres entre os andares
     variance = np.var(floor_weights)
-
     return variance
 
 
@@ -64,9 +57,7 @@ def calculate_floating_penalty(solution):
 def initialize_population():
     population = []
     for _ in range(POPULATION_SIZE):
-        second_floor_containers = list(np.random.permutation(15))
-        first_floor_containers = list(np.random.permutation(15) + 15)
-        individual = second_floor_containers + first_floor_containers
+        individual = list(np.random.permutation(NUM_CONTAINERS))
         population.append(individual)
     return population
 
@@ -80,11 +71,31 @@ def tournament_selection(population, fitnesses):
     return selected
 
 
-# Operador de cruzamento de um ponto
+# Operador de cruzamento baseado em ciclo
 def crossover(parent1, parent2):
-    point = random.randint(1, 14)  # Garantir cruzamento dentro do segundo andar
-    child1 = parent1[:point] + [x for x in parent2 if x not in parent1[:point]]
-    child2 = parent2[:point] + [x for x in parent1 if x not in parent2[:point]]
+    size = len(parent1)
+    child1, child2 = [None] * size, [None] * size
+    point = random.randint(0, size - 1)
+    cycle = [point]
+    child1[point] = parent1[point]
+    child2[point] = parent2[point]
+
+    while True:
+        next_val = parent2[point]
+        next_idx = parent1.index(next_val)
+        if next_idx in cycle:
+            break
+        cycle.append(next_idx)
+        child1[next_idx] = parent1[next_idx]
+        child2[next_idx] = parent2[next_idx]
+        point = next_idx
+
+    for i in range(size):
+        if child1[i] is None:
+            child1[i] = parent2[i]
+        if child2[i] is None:
+            child2[i] = parent1[i]
+
     return child1, child2
 
 
@@ -92,10 +103,7 @@ def crossover(parent1, parent2):
 def mutate(individual):
     if random.random() < MUTATION_RATE:
         i, j = random.sample(range(NUM_CONTAINERS), 2)
-        if (
-            i < 15 and j < 15 or i >= 15 and j >= 15
-        ):  # Garantir mutação dentro do mesmo andar
-            individual[i], individual[j] = individual[j], individual[i]
+        individual[i], individual[j] = individual[j], individual[i]
 
 
 # Algoritmo Genético
