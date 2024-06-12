@@ -1,5 +1,7 @@
 import numpy as np
 import random
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 # Definir constantes
 NUM_CONTAINERS = 30
@@ -21,16 +23,50 @@ def fitness(solution):
 
 
 def calculate_stability(solution):
+    # Definir a estrutura dos andares (3x4 para o 1º e 2º andar, 6 para o 3º andar)
+    floor_structure = [(3, 4), (3, 4), (1, 6)]
+
+    # Inicializar variáveis de pesos e penalidades
     floor_weights = [0] * len(CONTAINERS_PER_FLOOR)
+    left_right_balance = [0] * len(CONTAINERS_PER_FLOOR)
+    front_back_balance = [0] * len(CONTAINERS_PER_FLOOR)
+
     for position in solution:
+        floor = 0
         if position < 12:
-            floor_weights[0] += 1
+            floor = 0
         elif position < 24:
-            floor_weights[1] += 1
+            floor = 1
         else:
-            floor_weights[2] += 1
-    variance = np.var(floor_weights)
-    return variance
+            floor = 2
+
+        floor_weights[floor] += 1
+
+        rows, cols = floor_structure[floor]
+        row = (position % (rows * cols)) // cols
+        col = (position % (rows * cols)) % cols
+
+        if cols > 1:
+            if col < cols // 2:
+                left_right_balance[floor] += 1
+            else:
+                left_right_balance[floor] -= 1
+
+        if rows > 1:
+            if row < rows // 2:
+                front_back_balance[floor] += 1
+            else:
+                front_back_balance[floor] -= 1
+
+    # Calcular variância dos pesos
+    weight_variance = np.var(floor_weights)
+
+    # Calcular penalidades por desbalanceamento
+    left_right_penalty = sum(abs(balance) for balance in left_right_balance)
+    front_back_penalty = sum(abs(balance) for balance in front_back_balance)
+
+    # Retornar a soma ponderada das penalidades
+    return weight_variance + left_right_penalty + front_back_penalty
 
 
 def calculate_movements(solution):
@@ -109,7 +145,24 @@ def genetic_algorithm():
 
     elitism_count = int(POPULATION_SIZE * ELITISM_RATE)
 
-    for generation in range(GENERATIONS):
+    best_fitnesses = []
+    generation_best_solutions = []
+
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, GENERATIONS)
+    ax.set_ylim(
+        0.02, 0.05
+    )  # Ajustar os limites do eixo y para focar no intervalo relevante
+    ax.set_yticks(np.arange(0.02, 0.051, 0.005))  # Ajustar para incrementos de 0,005
+    (line,) = ax.plot([], [], lw=2)
+
+    def init():
+        line.set_data([], [])
+        return (line,)
+
+    def update(frame):
+        nonlocal population, best_solution, best_fitness
+
         fitnesses = [fitness(individual) for individual in population]
 
         # Preservar os melhores indivíduos (elitismo)
@@ -132,7 +185,26 @@ def genetic_algorithm():
             best_fitness = current_best_fitness
             best_solution = population[fitnesses.index(best_fitness)]
 
-        print(f"Generation {generation}: Best Fitness = {best_fitness}")
+        best_fitnesses.append(best_fitness)
+        generation_best_solutions.append(best_solution)
+
+        line.set_data(range(len(best_fitnesses)), best_fitnesses)
+        return (line,)
+
+    ani = animation.FuncAnimation(
+        fig,
+        update,
+        frames=range(GENERATIONS),
+        init_func=init,
+        blit=True,
+        repeat=False,
+        interval=10,
+    )
+
+    plt.xlabel("Generation")
+    plt.ylabel("Best Fitness")
+    plt.title("Genetic Algorithm Evolution")
+    plt.show()
 
     return best_solution, best_fitness
 
