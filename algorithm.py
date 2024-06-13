@@ -10,8 +10,9 @@ GENERATIONS = 1000
 MUTATION_RATE = 0.01
 ELITISM_RATE = 0.05
 CONTAINERS_PER_FLOOR = [12, 12, 6]
-PORT_ROWS = 3
-PORT_COLS = 5
+PORT_ROWS = 5
+PORT_COLS = 3
+FLOOR_SHAPE = [(4, 3), (4, 3), (4, 3)]  # Configuração para 4x3
 
 
 # Função de fitness
@@ -23,11 +24,6 @@ def fitness(solution):
 
 
 def calculate_stability(solution):
-    # Definir a estrutura dos andares (3x4 para o 1º e 2º andar, 6 para o 3º andar)
-    floor_structure = [(3, 4), (3, 4), (1, 6)]
-
-    # Inicializar variáveis de pesos e penalidades
-    floor_weights = [0] * len(CONTAINERS_PER_FLOOR)
     left_right_balance = [0] * len(CONTAINERS_PER_FLOOR)
     front_back_balance = [0] * len(CONTAINERS_PER_FLOOR)
 
@@ -40,9 +36,7 @@ def calculate_stability(solution):
         else:
             floor = 2
 
-        floor_weights[floor] += 1
-
-        rows, cols = floor_structure[floor]
+        rows, cols = FLOOR_SHAPE[floor]
         row = (position % (rows * cols)) // cols
         col = (position % (rows * cols)) % cols
 
@@ -58,15 +52,10 @@ def calculate_stability(solution):
             else:
                 front_back_balance[floor] -= 1
 
-    # Calcular variância dos pesos
-    weight_variance = np.var(floor_weights)
-
-    # Calcular penalidades por desbalanceamento
     left_right_penalty = sum(abs(balance) for balance in left_right_balance)
     front_back_penalty = sum(abs(balance) for balance in front_back_balance)
 
-    # Retornar a soma ponderada das penalidades
-    return weight_variance + left_right_penalty + front_back_penalty
+    return left_right_penalty + front_back_penalty
 
 
 def calculate_movements(solution):
@@ -83,10 +72,11 @@ def calculate_floating_penalty(solution):
     floor_indices = [
         sum(CONTAINERS_PER_FLOOR[:i]) for i in range(len(CONTAINERS_PER_FLOOR) + 1)
     ]
-    for floor in range(1, len(CONTAINERS_PER_FLOOR)):
-        for i in range(floor_indices[floor], floor_indices[floor + 1]):
-            if solution[i] < floor_indices[floor - 1]:
-                penalty += 1
+    for i in range(15, 30):  # Containers do primeiro andar (port positions 15 a 29)
+        if (
+            solution.index(i) < 15
+        ):  # Se estiver entre os primeiros 15 containers no barco
+            penalty += 1000  # Penalidade alta para quebra da regra
     return penalty
 
 
@@ -137,7 +127,7 @@ def mutate(individual):
         individual[i], individual[j] = individual[j], individual[i]
 
 
-# Algoritmo Genético com Elitismo e Seleção por Roleta
+# Função principal do Algoritmo Genético com a nova lógica de estabilidade
 def genetic_algorithm():
     population = initialize_population()
     best_solution = None
@@ -151,9 +141,9 @@ def genetic_algorithm():
     fig, ax = plt.subplots()
     ax.set_xlim(0, GENERATIONS)
     ax.set_ylim(
-        0.02, 0.05
+        0.02, 0.1
     )  # Ajustar os limites do eixo y para focar no intervalo relevante
-    ax.set_yticks(np.arange(0.02, 0.051, 0.005))  # Ajustar para incrementos de 0,005
+    ax.set_yticks(np.arange(0, 0.11, 0.01))  # Ajustar para incrementos de 0,01
     (line,) = ax.plot([], [], lw=2)
 
     def init():
@@ -198,7 +188,7 @@ def genetic_algorithm():
         init_func=init,
         blit=True,
         repeat=False,
-        interval=10,
+        interval=2,
     )
 
     plt.xlabel("Generation")
@@ -225,9 +215,56 @@ def get_coordinates(port_position, barge_position):
             break
         remaining -= count
     barge_slot = remaining
-    barge_row = barge_slot // 4  # Assumindo 4 colunas por andar na balsa
-    barge_col = barge_slot % 4
+    barge_row = barge_slot // 3  # Assumindo 3 colunas por andar na balsa
+    barge_col = barge_slot % 3
     return (port_floor, port_row, port_col), (barge_floor, barge_row, barge_col)
+
+
+# Função para exibir as matrizes do píer
+def display_pier_positions():
+    pier_floor_1 = np.zeros((PORT_ROWS, PORT_COLS), dtype=int)  # Primeiro andar do píer
+    pier_floor_2 = np.zeros((PORT_ROWS, PORT_COLS), dtype=int)  # Segundo andar do píer
+
+    for pos in range(30):
+        row = (pos % 15) // PORT_COLS
+        col = (pos % 15) % PORT_COLS
+        if pos < 15:
+            pier_floor_2[row, col] = pos + 1
+        else:
+            pier_floor_1[row, col] = pos + 1
+
+    print("Posições no píer (Segundo andar):")
+    print(pier_floor_2)
+    print()
+    print("Posições no píer (Primeiro andar):")
+    print(pier_floor_1)
+    print()
+
+
+# Função para exibir as matrizes dos andares do navio
+def display_ship_floors(solution):
+    floors = []
+    for rows, cols in FLOOR_SHAPE:
+        floors.append(np.zeros((rows, cols), dtype=int))
+
+    for i, container in enumerate(solution):
+        barge_position = solution.index(container)
+        barge_floor = 0
+        remaining = barge_position
+        for floor, count in enumerate(CONTAINERS_PER_FLOOR):
+            if remaining < count:
+                barge_floor = floor
+                break
+            remaining -= count
+        barge_slot = remaining
+        barge_row = barge_slot // floors[barge_floor].shape[1]
+        barge_col = barge_slot % floors[barge_floor].shape[1]
+        floors[barge_floor][barge_row, barge_col] = i + 1  # Ordem de transporte
+
+    for floor_idx, floor in enumerate(floors):
+        print(f"Andar {floor_idx + 1}:")
+        print(floor)
+        print()
 
 
 # Executar o algoritmo genético
@@ -240,3 +277,9 @@ for container in best_solution:
 
 print("Melhor solução encontrada:", best_solution)
 print("Fitness da melhor solução encontrada:", best_fitness)
+
+# Exibir as posições dos contêineres no píer antes do transporte
+display_pier_positions()
+
+# Exibir as matrizes dos andares do navio
+display_ship_floors(best_solution)
