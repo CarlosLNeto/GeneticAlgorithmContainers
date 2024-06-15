@@ -20,7 +20,7 @@ def fitness(solution):
     stability = calculate_stability(solution)
     movements = calculate_movements(solution)
     floating_penalty = calculate_floating_penalty(solution)
-    return 1 / (stability + movements + floating_penalty + 1)
+    return 1 / (stability + movements + floating_penalty)
 
 
 def calculate_stability(solution):
@@ -59,12 +59,17 @@ def calculate_stability(solution):
 
 
 def calculate_movements(solution):
-    initial_position = list(range(NUM_CONTAINERS))
     movements = 0
-    for i, container in enumerate(solution):
-        if initial_position[i] != container:
-            movements += 1
+    for port_position, barge_position in enumerate(solution):
+        port_coords, barge_coords = get_coordinates(port_position, barge_position)
+        movements += manhattan_distance(port_coords, barge_coords)
+        movements += abs(port_coords[0] - barge_coords[0])  # Movimentos de subida
+        movements += 1  # Movimento de descida
     return movements
+
+
+def manhattan_distance(coord1, coord2):
+    return abs(coord1[1] - coord2[1]) + abs(coord1[2] - coord2[2])
 
 
 def calculate_floating_penalty(solution):
@@ -139,11 +144,11 @@ def genetic_algorithm():
     generation_best_solutions = []
 
     fig, ax = plt.subplots()
-    ax.set_xlim(0, GENERATIONS)
+    ax.set_xlim(50, GENERATIONS)
     ax.set_ylim(
-        0.02, 0.1
+        0.006, 0.011
     )  # Ajustar os limites do eixo y para focar no intervalo relevante
-    ax.set_yticks(np.arange(0, 0.11, 0.01))  # Ajustar para incrementos de 0,01
+    ax.set_yticks(np.arange(0.006, 0.012, 0.001))  # Ajustar para incrementos de 0,01
     (line,) = ax.plot([], [], lw=2)
 
     def init():
@@ -241,45 +246,19 @@ def display_pier_positions():
     print()
 
 
-# Função para exibir as matrizes dos andares do navio
-def display_ship_floors(solution):
-    floors = []
-    for rows, cols in FLOOR_SHAPE:
-        floors.append(np.zeros((rows, cols), dtype=int))
-
-    for i, container in enumerate(solution):
-        barge_position = solution.index(container)
-        barge_floor = 0
-        remaining = barge_position
-        for floor, count in enumerate(CONTAINERS_PER_FLOOR):
-            if remaining < count:
-                barge_floor = floor
-                break
-            remaining -= count
-        barge_slot = remaining
-        barge_row = barge_slot // floors[barge_floor].shape[1]
-        barge_col = barge_slot % floors[barge_floor].shape[1]
-        floors[barge_floor][barge_row, barge_col] = i + 1  # Ordem de transporte
-
-    for floor_idx, floor in enumerate(floors):
-        print(f"Andar {floor_idx + 1}:")
-        print(floor)
-        print()
-
-
 # Executar o algoritmo genético
 best_solution, best_fitness = genetic_algorithm()
 
 # Mostrar coordenadas de origem e destino na ordem da melhor solução encontrada
 for container in best_solution:
     port_coord, barge_coord = get_coordinates(container, best_solution.index(container))
-    print(f"Container {container}: Porto {port_coord} -> Balsa {barge_coord}")
+    print(f"Container {container + 1}: Porto {port_coord} -> Balsa {barge_coord}")
+
+for i in range(len(best_solution)):
+    best_solution[i] = best_solution[i] + 1
 
 print("Melhor solução encontrada:", best_solution)
 print("Fitness da melhor solução encontrada:", best_fitness)
 
 # Exibir as posições dos contêineres no píer antes do transporte
 display_pier_positions()
-
-# Exibir as matrizes dos andares do navio
-display_ship_floors(best_solution)
