@@ -24,38 +24,34 @@ def fitness(solution):
 
 
 def calculate_stability(solution):
-    left_right_balance = [0] * len(CONTAINERS_PER_FLOOR)
-    front_back_balance = [0] * len(CONTAINERS_PER_FLOOR)
+    stability_penalty = 0
 
-    for position in solution:
-        floor = 0
-        if position < 12:
-            floor = 0
-        elif position < 24:
-            floor = 1
-        else:
-            floor = 2
+    def center_of_mass(floor_containers):
+        if len(floor_containers) == 0:
+            return (0, 0)
+        rows, cols = FLOOR_SHAPE[0]  # Assumindo que todos os andares têm a mesma forma
+        x_coords = [c // cols for c in floor_containers]
+        y_coords = [c % cols for c in floor_containers]
+        return (sum(x_coords) / len(x_coords), sum(y_coords) / len(y_coords))
 
-        rows, cols = FLOOR_SHAPE[floor]
-        row = (position % (rows * cols)) // cols
-        col = (position % (rows * cols)) % cols
+    def distance_from_center_of_mass(center, rows, cols):
+        center_x, center_y = center
+        ship_center_x, ship_center_y = rows / 2, cols / 2
+        return (
+            (center_x - ship_center_x) ** 2 + (center_y - ship_center_y) ** 2
+        ) ** 0.5
 
-        if cols > 1:
-            if col < cols // 2:
-                left_right_balance[floor] += 1
-            else:
-                left_right_balance[floor] -= 1
+    floor_indices = [
+        sum(CONTAINERS_PER_FLOOR[:i]) for i in range(len(CONTAINERS_PER_FLOOR) + 1)
+    ]
 
-        if rows > 1:
-            if row < rows // 2:
-                front_back_balance[floor] += 1
-            else:
-                front_back_balance[floor] -= 1
+    for i, (start, end) in enumerate(zip(floor_indices[:-1], floor_indices[1:])):
+        floor_containers = [solution.index(j) for j in range(start, end)]
+        center = center_of_mass(floor_containers)
+        rows, cols = FLOOR_SHAPE[i]
+        stability_penalty += distance_from_center_of_mass(center, rows, cols)
 
-    left_right_penalty = sum(abs(balance) for balance in left_right_balance)
-    front_back_penalty = sum(abs(balance) for balance in front_back_balance)
-
-    return left_right_penalty + front_back_penalty
+    return stability_penalty
 
 
 def calculate_movements(solution):
@@ -132,7 +128,6 @@ def mutate(individual):
         individual[i], individual[j] = individual[j], individual[i]
 
 
-# Função principal do Algoritmo Genético com a nova lógica de estabilidade
 def genetic_algorithm():
     population = initialize_population()
     best_solution = None
@@ -146,9 +141,11 @@ def genetic_algorithm():
     fig, ax = plt.subplots()
     ax.set_xlim(50, GENERATIONS)
     ax.set_ylim(
-        0.006, 0.011
+        0.007, 0.012
     )  # Ajustar os limites do eixo y para focar no intervalo relevante
-    ax.set_yticks(np.arange(0.006, 0.012, 0.001))  # Ajustar para incrementos de 0,01
+    ax.set_yticks(
+        np.arange(0.007, 0.013, 0.001)
+    )  # Ajustar para incrementos de 0,01 # Ajustar os limites do eixo y para focar no intervalo relevante
     (line,) = ax.plot([], [], lw=2)
 
     def init():
@@ -196,15 +193,14 @@ def genetic_algorithm():
         interval=2,
     )
 
-    plt.xlabel("Generation")
-    plt.ylabel("Best Fitness")
-    plt.title("Genetic Algorithm Evolution")
+    plt.xlabel("Gerações")
+    plt.ylabel("Melhor Fitness")
+    plt.title("Evolução do Algoritmo genético")
     plt.show()
 
     return best_solution, best_fitness
 
 
-# Coordenadas de origem e destino
 def get_coordinates(port_position, barge_position):
     # Coordenadas no porto
     port_floor = 1 if port_position < 15 else 0
@@ -219,10 +215,45 @@ def get_coordinates(port_position, barge_position):
             barge_floor = floor
             break
         remaining -= count
+
     barge_slot = remaining
-    barge_row = barge_slot // 3  # Assumindo 3 colunas por andar na balsa
-    barge_col = barge_slot % 3
-    return (port_floor, port_row, port_col), (barge_floor, barge_row, barge_col)
+    if barge_floor == 0:
+        order = [
+            (1, 1),
+            (1, 2),
+            (1, 0),
+            (2, 1),
+            (2, 2),
+            (2, 0),
+            (0, 1),
+            (0, 2),
+            (0, 0),
+            (3, 1),
+            (3, 2),
+            (3, 0),
+        ]
+    elif barge_floor == 1:
+        order = [
+            (1, 1),
+            (1, 2),
+            (1, 0),
+            (2, 1),
+            (2, 2),
+            (2, 0),
+            (0, 1),
+            (0, 2),
+            (0, 0),
+            (3, 1),
+            (3, 2),
+            (3, 0),
+        ]
+    else:
+        order = [(1, 1), (1, 2), (1, 0), (2, 1), (2, 2), (2, 0)]
+
+    if barge_slot >= len(order):
+        raise IndexError(f"Invalid barge slot: {barge_slot}")
+
+    return (port_floor, port_row, port_col), (barge_floor, *order[barge_slot])
 
 
 # Função para exibir as matrizes do píer
@@ -249,16 +280,22 @@ def display_pier_positions():
 # Executar o algoritmo genético
 best_solution, best_fitness = genetic_algorithm()
 
-# Mostrar coordenadas de origem e destino na ordem da melhor solução encontrada
-for container in best_solution:
-    port_coord, barge_coord = get_coordinates(container, best_solution.index(container))
-    print(f"Container {container + 1}: Porto {port_coord} -> Balsa {barge_coord}")
+# Verificar se uma solução foi encontrada
+if best_solution is not None:
+    # Mostrar coordenadas de origem e destino na ordem da melhor solução encontrada
+    for container in best_solution:
+        port_coord, barge_coord = get_coordinates(
+            container, best_solution.index(container)
+        )
+        print(f"Container {container + 1}: Porto {port_coord} -> Balsa {barge_coord}")
 
-for i in range(len(best_solution)):
-    best_solution[i] = best_solution[i] + 1
+    for i in range(len(best_solution)):
+        best_solution[i] = best_solution[i] + 1
 
-print("Melhor solução encontrada:", best_solution)
-print("Fitness da melhor solução encontrada:", best_fitness)
+    print("Melhor solução encontrada:", best_solution)
+    print("Fitness da melhor solução encontrada:", best_fitness)
+else:
+    print("Nenhuma solução encontrada.")
 
 # Exibir as posições dos contêineres no píer antes do transporte
 display_pier_positions()
