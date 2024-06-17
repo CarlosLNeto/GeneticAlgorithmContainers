@@ -19,8 +19,8 @@ FLOOR_SHAPE = [(4, 3), (4, 3), (4, 3)]  # Configuração para 4x3
 def fitness(solution):
     stability = calculate_stability(solution)
     movements = calculate_movements(solution)
-    floating_penalty = calculate_floating_penalty(solution)
-    return 1 / (stability + movements + floating_penalty)
+    floor_violation = calculate_floor_violation_penalty(solution)
+    return 1 / (stability + movements + floor_violation)
 
 
 def calculate_stability(solution):
@@ -68,7 +68,7 @@ def manhattan_distance(coord1, coord2):
     return abs(coord1[1] - coord2[1]) + abs(coord1[2] - coord2[2])
 
 
-def calculate_floating_penalty(solution):
+def calculate_floor_violation_penalty(solution):
     penalty = 0
     floor_indices = [
         sum(CONTAINERS_PER_FLOOR[:i]) for i in range(len(CONTAINERS_PER_FLOOR) + 1)
